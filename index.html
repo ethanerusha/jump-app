@@ -1,104 +1,78 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Manual Jump Lab</title>
+    <title>Jump Lab Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
     <style>
-        body { font-family: -apple-system, sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 15px; }
-        #vid { width: 100%; border-radius: 15px; background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        button, label { background: #333; color: white; border: none; padding: 15px; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; }
+        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; padding: 15px; }
+        .video-wrapper { width: 100%; max-width: 500px; margin: auto; background: #222; border-radius: 15px; overflow: hidden; min-height: 200px; border: 2px solid #333; }
+        video { width: 100%; display: block; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        button, label { background: #333; color: white; border: none; padding: 18px; border-radius: 12px; font-weight: bold; font-size: 14px; }
         .primary { background: #00ff88; color: #000; }
-        .secondary { background: #ff4444; color: white; }
-        .scrub-btns { grid-column: span 2; display: flex; justify-content: space-between; gap: 5px; }
-        .scrub-btns button { flex: 1; background: #444; }
-        #result { font-size: 48px; font-weight: 900; color: #00ff88; margin: 20px 0; text-shadow: 0 0 20px rgba(0,255,136,0.3); }
-        .time-box { font-family: monospace; font-size: 12px; color: #888; margin-bottom: 10px; }
+        .scrub { background: #444; flex: 1; padding: 15px 5px; }
+        #result { font-size: 50px; font-weight: 900; color: #00ff88; margin: 20px 0; }
         #fileInput { display: none; }
+        .scrub-row { grid-column: span 2; display: flex; gap: 5px; }
     </style>
 </head>
 <body>
 
-    <h2 style="margin-top:0">Manual Jump Tracker</h2>
-
-    <video id="vid" playsinline muted></video>
-    
-    <div class="time-box" id="timeDisplay">Time: 0.0000s</div>
+    <div class="video-wrapper">
+        <video id="vid" playsinline muted controls></video>
+    </div>
 
     <div class="controls">
-        <label for="fileInput" class="primary" style="grid-column: span 2;">1. UPLOAD VIDEO</label>
+        <label for="fileInput" class="primary" style="grid-column: span 2;">1. SELECT VIDEO</label>
         <input type="file" id="fileInput" accept="video/*">
 
-        <div class="scrub-btns">
-            <button onclick="changeTime(-0.033)">- 1 Frame (30fps)</button>
-            <button onclick="changeTime(-0.004)">- 1 Frame (Slo-mo)</button>
-            <button onclick="changeTime(0.004)">+ 1 Frame (Slo-mo)</button>
-            <button onclick="changeTime(0.033)">+ 1 Frame (30fps)</button>
+        <div class="scrub-row">
+            <button class="scrub" onclick="move(-0.033)">-1 Frame</button>
+            <button class="scrub" onclick="move(-0.004)">-SloMo</button>
+            <button class="scrub" onclick="move(0.004)">+SloMo</button>
+            <button class="scrub" onclick="move(0.033)">+1 Frame</button>
         </div>
 
-        <button class="secondary" onclick="markTakeoff()">MARK TAKEOFF</button>
-        <button class="secondary" onclick="markLanding()">MARK LANDING</button>
+        <button style="background:#ff4444" onclick="mark('takeoff')">MARK TAKEOFF</button>
+        <button style="background:#ff4444" onclick="mark('landing')">MARK LANDING</button>
     </div>
 
     <div id="result">-- cm</div>
-    <div id="status" style="font-size: 12px; color: #666;">Waiting for markers...</div>
+    <div id="debug" style="font-size:12px; color:#666;">Ready...</div>
 
     <script>
-        const video = document.getElementById('vid');
-        const resultDisplay = document.getElementById('result');
-        const statusDisplay = document.getElementById('status');
-        const timeDisplay = document.getElementById('timeDisplay');
+        const v = document.getElementById('vid');
+        const res = document.getElementById('result');
+        const dbg = document.getElementById('debug');
+        let t1 = 0, t2 = 0;
 
-        let takeoffTime = 0;
-        let landingTime = 0;
-
-        // Handle Video Upload
         document.getElementById('fileInput').onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            video.src = URL.createObjectURL(file);
-            video.onloadeddata = () => {
-                video.currentTime = 0;
-                statusDisplay.innerText = "Video Loaded. Find Takeoff frame.";
-            };
+            
+            // This creates a temporary URL for your video file
+            v.src = URL.createObjectURL(file);
+            v.style.display = "block";
+            
+            // Force the iPhone to load the video
+            v.load();
+            dbg.innerText = "Video loading... Tap play to verify.";
         };
 
-        // Move video precisely
-        function changeTime(seconds) {
-            video.currentTime += seconds;
-        }
+        function move(sec) { v.currentTime += sec; }
 
-        video.ontimeupdate = () => {
-            timeDisplay.innerText = `Time: ${video.currentTime.toFixed(4)}s`;
-        };
-
-        function markTakeoff() {
-            takeoffTime = video.currentTime;
-            statusDisplay.innerText = `Takeoff: ${takeoffTime.toFixed(4)}s | Now find Landing.`;
-            calculate();
-        }
-
-        function markLanding() {
-            landingTime = video.currentTime;
-            statusDisplay.innerText = `Takeoff: ${takeoffTime.toFixed(4)}s | Landing: ${landingTime.toFixed(4)}s`;
-            calculate();
-        }
-
-        function calculate() {
-            if (takeoffTime > 0 && landingTime > 0) {
-                let flightTime = landingTime - takeoffTime;
-                
-                if (flightTime <= 0) {
-                    resultDisplay.innerText = "Error";
-                    statusDisplay.innerText = "Landing must be AFTER takeoff!";
-                    return;
-                }
-
-                // Standard Physics formula: h = 1/8 * g * t^2
-                // Simplified: 1.225 * t^2 gives result in meters
-                // Then multiply by 100 for cm
+        function mark(type) {
+            if (type === 'takeoff') {
+                t1 = v.currentTime;
+                dbg.innerText = `Takeoff set: ${t1.toFixed(4)}s`;
+            } else {
+                t2 = v.currentTime;
+                dbg.innerText = `Landing set: ${t2.toFixed(4)}s`;
+            }
+            if (t1 > 0 && t2 > t1) {
+                let flightTime = t2 - t1;
                 let heightCm = 122.5 * Math.pow(flightTime, 2);
-                resultDisplay.innerText = heightCm.toFixed(2) + " cm";
+                res.innerText = heightCm.toFixed(2) + " cm";
             }
         }
     </script>
