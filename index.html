@@ -1,19 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Jump Tracker Pro</title>
+    <title>Jump Tracker Debug Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; padding: 10px; }
-        #container { position: relative; width: 100%; max-width: 500px; margin: auto; border-radius: 20px; overflow: hidden; background: #111; }
+        #container { position: relative; width: 100%; max-width: 500px; margin: auto; background: #111; border-radius: 20px; overflow: hidden; }
         canvas { width: 100%; display: block; }
         .controls { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        button, label { background: #00ff88; color: #000; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; border: none; }
+        button, label { background: #00ff88; color: #000; padding: 15px; border-radius: 12px; font-weight: bold; border: none; }
         #fileInput { display: none; }
-        .res-box { font-size: 32px; color: #00ff88; margin: 15px 0; font-weight: 800; }
-        .log { font-size: 14px; color: #888; height: 40px; }
+        .res-box { font-size: 40px; color: #00ff88; margin: 10px 0; font-weight: 800; }
+        .debug-text { font-size: 12px; color: #aaa; font-family: monospace; }
     </style>
 </head>
 <body>
@@ -22,31 +22,31 @@
     </div>
 
     <div class="controls">
-        <div id="status" class="log">Waiting for video...</div>
-        <div id="result" class="res-box">0.00 cm</div>
+        <div id="result" class="res-box">-- cm</div>
+        <div id="status">Stand still, then jump!</div>
         
-        <button id="liveBtn">Option A: Live Camera</button>
-        
-        <label for="fileInput">Option B: Upload from Camera Roll</label>
+        <label for="fileInput">Upload Jump Video</label>
         <input type="file" id="fileInput" accept="video/*">
+        
+        <button onclick="location.reload()" style="background:#444; color:white;">Reset App</button>
+        <div id="debug" class="debug-text">Floor: -- | Ankle: --</div>
     </div>
 
-    <video id="vid" style="display:none" playsinline></video>
+    <video id="vid" style="display:none" playsinline muted></video>
 
     <script>
         const video = document.getElementById('vid');
         const canvas = document.getElementById('out_canvas');
         const ctx = canvas.getContext('2d');
-        const status = document.getElementById('status');
         const heightDisplay = document.getElementById('result');
+        const debugDisplay = document.getElementById('debug');
 
-        let floorY = 0;
-        let isJumping = false;
+        let floorY = 0; 
         let takeoffTime = 0;
-        let framesProcessed = 0;
+        let isJumping = false;
 
         const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
-        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.6 });
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
 
         pose.onResults((results) => {
             canvas.width = results.image.width;
@@ -54,66 +54,62 @@
             ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
             if (results.poseLandmarks) {
-                const ankles = (results.poseLandmarks[27].y + results.poseLandmarks[28].y) / 2;
+                const leftAnkle = results.poseLandmarks[27].y;
+                const rightAnkle = results.poseLandmarks[28].y;
+                const ankles = (leftAnkle + rightAnkle) / 2;
+
+                // 1. DYNAMIC FLOOR TRACKING
+                // If the ankle is lower than our current floor, update the floor.
+                if (ankles > floorY) floorY = ankles;
+
+                // 2. JUMP LOGIC
+                // We leave the ground if we move 2% higher than the floor
+                const threshold = floorY - 0.02; 
                 
-                // 1. CALIBRATION: First 10 frames set the 'floor'
-                if (framesProcessed < 30) {
-                    floorY = (floorY * framesProcessed + ankles) / (framesProcessed + 1);
-                    status.innerText = "Calibrating floor... Stand still";
-                    framesProcessed++;
-                } else {
-                    // 2. JUMP DETECTION
-                    const threshold = floorY - 0.03; // Threshold: 3% height of screen
-                    
-                    if (!isJumping && ankles < threshold) {
-                        isJumping = true;
-                        takeoffTime = video.currentTime || performance.now() / 1000;
-                        status.innerText = "🚀 AIRBORNE!";
-                    } else if (isJumping && ankles >= threshold) {
-                        isJumping = false;
-                        let landingTime = video.currentTime || performance.now() / 1000;
-                        let flightTime = landingTime - takeoffTime;
-                        
-                        if (flightTime > 0.1) { // Ignore tiny glitches
-                            let heightCm = 122.5 * Math.pow(flightTime, 2);
-                            heightDisplay.innerText = heightCm.toFixed(2) + " cm";
-                            status.innerText = `Flight Time: ${flightTime.toFixed(3)}s`;
-                        }
+                if (!isJumping && ankles < threshold) {
+                    isJumping = true;
+                    takeoffTime = video.currentTime;
+                } else if (isJumping && ankles > threshold) {
+                    isJumping = false;
+                    let flightTime = video.currentTime - takeoffTime;
+                    if (flightTime > 0.15) { // Minimum flight time filter
+                        let heightCm = 122.5 * Math.pow(flightTime, 2);
+                        heightDisplay.innerText = heightCm.toFixed(1) + " cm";
                     }
                 }
+
+                // 3. VISUAL DEBUGGER
+                // Draw Floor Line (Red)
+                ctx.strokeStyle = "red"; ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(0, floorY * canvas.height);
+                ctx.lineTo(canvas.width, floorY * canvas.height);
+                ctx.stroke();
+
+                // Draw Ankle Dot (Green)
+                ctx.fillStyle = "#00ff88";
+                ctx.beginPath();
+                ctx.arc(results.poseLandmarks[27].x * canvas.width, ankles * canvas.height, 10, 0, 2 * Math.PI);
+                ctx.fill();
+
+                debugDisplay.innerText = `Floor: ${floorY.toFixed(3)} | Ankle: ${ankles.toFixed(3)} | InAir: ${isJumping}`;
             }
         });
 
-        // LIVE CAMERA MODE
-        document.getElementById('liveBtn').onclick = () => {
-            framesProcessed = 0; // Reset floor
-            const camera = new Camera(video, {
-                onFrame: async () => { await pose.send({image: video}); },
-                width: 1280, height: 720
-            });
-            camera.start();
-        };
-
-        // VIDEO UPLOAD MODE
         document.getElementById('fileInput').onchange = (e) => {
             const file = e.target.files[0];
-            const url = URL.createObjectURL(file);
-            video.src = url;
-            video.load();
-            framesProcessed = 0; // Reset floor
+            video.src = URL.createObjectURL(file);
             video.onloadeddata = () => {
-                status.innerText = "Processing video...";
+                floorY = 0; // Reset for new video
                 video.play();
-                processVideoFrames();
+                process();
             };
         };
 
-        async function processVideoFrames() {
+        async function process() {
             if (!video.paused && !video.ended) {
                 await pose.send({image: video});
-                requestAnimationFrame(processVideoFrames);
-            } else {
-                status.innerText = "Processing Complete.";
+                requestAnimationFrame(process);
             }
         }
     </script>
