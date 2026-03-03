@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pro Jump Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; }
+        #canvas_container { position: relative; width: 100vw; height: 70vh; background: #111; }
+        canvas { width: 100%; height: 100%; object-fit: contain; }
+        .stats { padding: 20px; background: #1a1a1a; border-radius: 20px 20px 0 0; position: fixed; bottom: 0; width: 100%; }
+        #height { font-size: 48px; color: #00ff88; font-weight: bold; margin: 10px 0; }
+        button { background: #00ff88; color: #000; border: none; padding: 15px 40px; border-radius: 30px; font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="canvas_container">
+        <canvas id="out_canvas"></canvas>
+    </div>
+    <div class="stats">
+        <div id="status">Ready to Jump</div>
+        <div id="height">0.00 cm</div>
+        <button id="startBtn">START TRACKING</button>
+    </div>
+    <video id="vid" style="display:none" playsinline></video>
+
+    <script>
+        const video = document.getElementById('vid');
+        const canvas = document.getElementById('out_canvas');
+        const ctx = canvas.getContext('2d');
+        const heightDisplay = document.getElementById('height');
+        
+        let inAir = false;
+        let takeoffTime = 0;
+        const g = 9.81; // Gravity
+
+        const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+
+        pose.onResults((results) => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            
+            if (results.poseLandmarks) {
+                const leftAnkle = results.poseLandmarks[27].y;
+                const rightAnkle = results.poseLandmarks[28].y;
+                const avgAnkle = (leftAnkle + rightAnkle) / 2;
+
+                // Simple Logic: If ankles go above a certain point on screen
+                // In a real workout, you'd calibrate the 'floor' first.
+                if (!inAir && avgAnkle < 0.85) { // JUMPED
+                    inAir = true;
+                    takeoffTime = performance.now();
+                    document.getElementById('status').innerText = "IN THE AIR!";
+                } else if (inAir && avgAnkle > 0.86) { // LANDED
+                    inAir = false;
+                    let flightTime = (performance.now() - takeoffTime) / 1000;
+                    // Physics Formula: h = 1/8 * g * t^2
+                    let jumpHeightMeters = (g * Math.pow(flightTime, 2)) / 8;
+                    let jumpHeightCm = jumpHeightMeters * 100;
+                    
+                    heightDisplay.innerText = jumpHeightCm.toFixed(2) + " cm";
+                    document.getElementById('status').innerText = "Landed!";
+                }
+            }
+        });
+
+        document.getElementById('startBtn').onclick = () => {
+            const camera = new Camera(video, {
+                onFrame: async () => { await pose.send({image: video}); },
+                width: 1280, height: 720
+            });
+            camera.start();
+        };
+    </script>
+</body>
+</html>
