@@ -1,19 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Jump Tracker Debug Pro</title>
+    <title>Jump Tracker Pro (Visible Scan)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; padding: 10px; }
-        #container { position: relative; width: 100%; max-width: 500px; margin: auto; background: #111; border-radius: 20px; overflow: hidden; }
+        #container { position: relative; width: 100%; max-width: 500px; margin: auto; background: #111; border-radius: 20px; overflow: hidden; border: 2px solid #333; }
         canvas { width: 100%; display: block; }
-        .controls { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        button, label { background: #00ff88; color: #000; padding: 15px; border-radius: 12px; font-weight: bold; border: none; }
+        .controls { padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        label { background: #00ff88; color: #000; padding: 18px; border-radius: 15px; font-weight: bold; cursor: pointer; font-size: 18px; }
         #fileInput { display: none; }
-        .res-box { font-size: 40px; color: #00ff88; margin: 10px 0; font-weight: 800; }
-        .debug-text { font-size: 12px; color: #aaa; font-family: monospace; }
+        
+        /* Progress Bar UI */
+        #progressContainer { display: none; margin-top: 10px; }
+        #progressBar { width: 100%; height: 10px; background: #333; border-radius: 5px; overflow: hidden; }
+        #progressFill { width: 0%; height: 100%; background: #00ff88; transition: width 0.1s; }
+        
+        .res-box { font-size: 45px; color: #00ff88; margin: 10px 0; font-weight: 900; }
+        .status-msg { font-size: 14px; color: #00ff88; height: 20px; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 </head>
 <body>
@@ -22,29 +27,38 @@
     </div>
 
     <div class="controls">
-        <div id="result" class="res-box">-- cm</div>
-        <div id="status">Stand still, then jump!</div>
+        <div id="status" class="status-msg">READY FOR UPLOAD</div>
+        <div id="progressContainer">
+            <div id="progressBar"><div id="progressFill"></div></div>
+            <p id="progressPercent" style="font-size: 12px; margin-top: 5px;">0% Analyzed</p>
+        </div>
         
-        <label for="fileInput">Upload Jump Video</label>
+        <div id="result" class="res-box">-- cm</div>
+        
+        <label for="fileInput">SELECT JUMP VIDEO</label>
         <input type="file" id="fileInput" accept="video/*">
         
-        <button onclick="location.reload()" style="background:#444; color:white;">Reset App</button>
-        <div id="debug" class="debug-text">Floor: -- | Ankle: --</div>
+        <p style="font-size: 12px; color: #666;">Note: Slow-mo videos take 30-60 seconds to scan.</p>
     </div>
 
-    <video id="vid" style="display:none" playsinline muted></video>
+    <video id="vid" style="display:none" playsinline muted crossorigin="anonymous"></video>
 
     <script>
         const video = document.getElementById('vid');
         const canvas = document.getElementById('out_canvas');
         const ctx = canvas.getContext('2d');
         const heightDisplay = document.getElementById('result');
-        const debugDisplay = document.getElementById('debug');
+        const status = document.getElementById('status');
+        const progressFill = document.getElementById('progressFill');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressContainer = document.getElementById('progressContainer');
 
         let floorY = 0; 
-        let takeoffTime = 0;
+        let takeoffTime = null;
         let isJumping = false;
+        let jumpLog = [];
 
+        // 1. Initialize AI
         const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
         pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
 
@@ -54,17 +68,10 @@
             ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
             if (results.poseLandmarks) {
-                const leftAnkle = results.poseLandmarks[27].y;
-                const rightAnkle = results.poseLandmarks[28].y;
-                const ankles = (leftAnkle + rightAnkle) / 2;
-
-                // 1. DYNAMIC FLOOR TRACKING
-                // If the ankle is lower than our current floor, update the floor.
+                const ankles = (results.poseLandmarks[27].y + results.poseLandmarks[28].y) / 2;
                 if (ankles > floorY) floorY = ankles;
 
-                // 2. JUMP LOGIC
-                // We leave the ground if we move 2% higher than the floor
-                const threshold = floorY - 0.02; 
+                const threshold = floorY - 0.015; // 1.5% screen height
                 
                 if (!isJumping && ankles < threshold) {
                     isJumping = true;
@@ -72,45 +79,61 @@
                 } else if (isJumping && ankles > threshold) {
                     isJumping = false;
                     let flightTime = video.currentTime - takeoffTime;
-                    if (flightTime > 0.15) { // Minimum flight time filter
+                    if (flightTime > 0.15) {
                         let heightCm = 122.5 * Math.pow(flightTime, 2);
-                        heightDisplay.innerText = heightCm.toFixed(1) + " cm";
+                        jumpLog.push(heightCm);
+                        heightDisplay.innerText = Math.max(...jumpLog).toFixed(1) + " cm";
                     }
                 }
 
-                // 3. VISUAL DEBUGGER
-                // Draw Floor Line (Red)
-                ctx.strokeStyle = "red"; ctx.lineWidth = 5;
-                ctx.beginPath();
-                ctx.moveTo(0, floorY * canvas.height);
-                ctx.lineTo(canvas.width, floorY * canvas.height);
-                ctx.stroke();
-
-                // Draw Ankle Dot (Green)
-                ctx.fillStyle = "#00ff88";
-                ctx.beginPath();
-                ctx.arc(results.poseLandmarks[27].x * canvas.width, ankles * canvas.height, 10, 0, 2 * Math.PI);
-                ctx.fill();
-
-                debugDisplay.innerText = `Floor: ${floorY.toFixed(3)} | Ankle: ${ankles.toFixed(3)} | InAir: ${isJumping}`;
+                // Visual markers
+                ctx.strokeStyle = "red"; ctx.lineWidth = 8;
+                ctx.beginPath(); ctx.moveTo(0, floorY * canvas.height); ctx.lineTo(canvas.width, floorY * canvas.height); ctx.stroke();
+                ctx.fillStyle = "#00ff88"; ctx.beginPath(); ctx.arc(results.poseLandmarks[27].x * canvas.width, ankles * canvas.height, 15, 0, Math.PI*2); ctx.fill();
             }
         });
 
+        // 2. Handle File Upload
         document.getElementById('fileInput').onchange = (e) => {
             const file = e.target.files[0];
+            if (!file) return;
+
+            status.innerText = "LOADING VIDEO...";
+            progressContainer.style.display = "block";
+            heightDisplay.innerText = "-- cm";
+            jumpLog = [];
+            floorY = 0;
+
             video.src = URL.createObjectURL(file);
             video.onloadeddata = () => {
-                floorY = 0; // Reset for new video
-                video.play();
-                process();
+                video.pause();
+                processFrameByFrame();
             };
         };
 
-        async function process() {
-            if (!video.paused && !video.ended) {
+        // 3. Precise Frame-by-Frame Processing
+        async function processFrameByFrame() {
+            const fps = 30; // We'll scan at 30 intervals per second of video
+            const totalDuration = video.duration;
+            
+            for (let t = 0; t <= totalDuration; t += 1/fps) {
+                video.currentTime = t;
+                
+                // Wait for the video to actually seek to the frame
+                await new Promise(r => video.onseeked = r);
+                
+                // Send frame to AI
                 await pose.send({image: video});
-                requestAnimationFrame(process);
+
+                // Update Progress Bar
+                let percent = Math.round((t / totalDuration) * 100);
+                progressFill.style.width = percent + "%";
+                progressPercent.innerText = percent + "% Analyzed";
+                status.innerText = "SCANNING JUMP...";
             }
+
+            status.innerText = "ANALYSIS COMPLETE";
+            progressPercent.innerText = "100% Done";
         }
     </script>
 </body>
