@@ -1,46 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Jump Lab Pro</title>
+    <title>Jump Lab Pro (Fix)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
     <style>
-        /* CRITICAL: Stops iPhone Safari from zooming when you tap buttons fast */
-        * { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-
-        body { font-family: -apple-system, system-ui, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; padding: 10px; overflow-x: hidden; }
+        * { touch-action: manipulation; -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; padding: 10px; }
         .container { max-width: 500px; margin: auto; }
         
-        /* Video Styling */
-        .video-wrapper { width: 100%; background: #111; border-radius: 20px; overflow: hidden; border: 2px solid #333; margin-bottom: 10px; position: relative; min-height: 200px; }
-        video { width: 100%; display: block; }
+        /* Fixed Video Box */
+        .video-wrapper { 
+            width: 100%; 
+            aspect-ratio: 9/16; /* Vertical video standard */
+            background: #111; 
+            border-radius: 20px; 
+            overflow: hidden; 
+            border: 2px solid #333; 
+            margin-bottom: 10px; 
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        video { width: 100%; height: 100%; object-fit: contain; display: block; }
         
-        /* Result Display */
-        #result { font-size: 60px; font-weight: 900; color: #00ff88; margin: 5px 0; text-shadow: 0 0 20px rgba(0,255,136,0.3); }
-        .unit { font-size: 20px; color: #00ff88; margin-left: 5px; }
+        #result { font-size: 60px; font-weight: 900; color: #00ff88; margin: 5px 0; }
+        .unit { font-size: 20px; margin-left: 5px; }
 
-        /* Mode Toggle */
         .mode-selector { display: flex; background: #222; border-radius: 12px; padding: 4px; margin-bottom: 10px; }
-        .mode-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; background: transparent; color: #888; font-weight: bold; font-size: 12px; }
+        .mode-btn { flex: 1; padding: 12px; border-radius: 8px; border: none; background: transparent; color: #888; font-weight: bold; }
         .mode-btn.active { background: #444; color: #00ff88; }
 
-        /* Controls */
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        button, label { background: #222; color: white; border: none; padding: 18px; border-radius: 12px; font-weight: bold; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+        .upload-btn { background: #00ff88; color: #000; grid-column: span 2; padding: 20px; border-radius: 15px; font-weight: 900; cursor: pointer; }
+        .scrub-btn { background: #333; color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; }
+        .mark-btn { background: #ff4444; color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; }
         
-        .upload-btn { background: #00ff88; color: #000; grid-column: span 2; font-size: 16px; margin-bottom: 5px; cursor: pointer; }
-        .scrub-btn { background: #333; }
-        .mark-btn { background: #ff4444; color: white; }
+        input[type=range] { width: 100%; height: 40px; accent-color: #00ff88; margin: 5px 0; }
+        .time-info { font-family: monospace; font-size: 12px; color: #666; display: flex; justify-content: space-between; }
         
-        /* Slider Scrubber */
-        input[type=range] { width: 100%; height: 35px; accent-color: #00ff88; background: transparent; margin: 5px 0; }
-        .time-info { font-family: monospace; font-size: 12px; color: #666; display: flex; justify-content: space-between; padding: 0 5px; }
-
-        /* History Table */
-        .history { margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; text-align: left; }
-        .history h3 { margin-top: 0; font-size: 14px; color: #888; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
-        table { width: 100%; border-collapse: collapse; }
-        td { padding: 10px 0; border-bottom: 1px solid #222; font-size: 14px; }
-        .hist-val { font-weight: bold; color: #00ff88; text-align: right; }
+        #historyTable { width: 100%; margin-top: 20px; font-size: 14px; text-align: left; border-top: 1px solid #333; }
+        .hist-val { color: #00ff88; font-weight: bold; text-align: right; }
     </style>
 </head>
 <body>
@@ -49,22 +49,22 @@
     <div id="result">0.0<span class="unit">cm</span></div>
     
     <div class="mode-selector">
-        <button id="normMode" class="mode-btn active" onclick="setMode('normal')">NORMAL (30/60fps)</button>
-        <button id="sloMode" class="mode-btn" onclick="setMode('slo')">SLO-MO (240fps)</button>
+        <button id="normMode" class="mode-btn active" onclick="setMode('normal')">NORMAL</button>
+        <button id="sloMode" class="mode-btn" onclick="setMode('slo')">SLO-MO</button>
     </div>
 
     <div class="video-wrapper">
-        <video id="vid" playsinline muted></video>
+        <video id="vid" playsinline muted preload="auto"></video>
     </div>
 
     <div class="time-info">
         <span id="currentTime">0.000s</span>
-        <span id="jumpStatus">Select Takeoff</span>
+        <span id="jumpStatus">Upload Video</span>
     </div>
     <input type="range" id="scrubber" min="0" max="100" step="0.001" value="0">
 
     <div class="controls">
-        <label for="fileInput" class="upload-btn">UPLOAD JUMP VIDEO</label>
+        <label for="fileInput" class="upload-btn">SELECT VIDEO</label>
         <input type="file" id="fileInput" accept="video/*" style="display:none">
 
         <button class="scrub-btn" onclick="move(-0.033)">-1 Frame</button>
@@ -76,10 +76,7 @@
         <button class="mark-btn" onclick="mark('landing')">MARK LANDING</button>
     </div>
 
-    <div class="history">
-        <h3>Jump History</h3>
-        <table id="historyTable"></table>
-    </div>
+    <table id="historyTable"></table>
 </div>
 
 <script>
@@ -102,18 +99,24 @@
     document.getElementById('fileInput').onchange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            v.src = URL.createObjectURL(file);
-            v.onloadedmetadata = () => {
+            const url = URL.createObjectURL(file);
+            v.src = url;
+            status.innerText = "Loading...";
+
+            v.onloadedmetadata = async () => {
                 scrub.max = v.duration;
-                v.currentTime = 0;
-                t1 = null; t2 = null;
-                status.innerText = "Ready: Find Takeoff";
+                // --- THE BUG FIX: FORCE WAKEUP ---
+                v.currentTime = 0.1; // Move slightly forward
+                await v.play();      // Play for a millisecond
+                v.pause();           // Pause immediately
+                v.currentTime = 0;   // Reset to start
+                // ---------------------------------
+                status.innerText = "Video Ready!";
             };
         }
     };
 
     scrub.oninput = () => { v.currentTime = scrub.value; };
-    
     v.ontimeupdate = () => { 
         scrub.value = v.currentTime;
         timeDisp.innerText = v.currentTime.toFixed(3) + "s";
@@ -124,7 +127,7 @@
     function mark(type) {
         if (type === 'takeoff') {
             t1 = v.currentTime;
-            status.innerText = "Takeoff Set! Now Landing.";
+            status.innerText = "Takeoff Set!";
         } else {
             t2 = v.currentTime;
             status.innerText = "Landing Set!";
@@ -134,18 +137,14 @@
 
     function calculate(save = false) {
         if (t1 !== null && t2 !== null && t2 > t1) {
-            let videoTime = t2 - t1;
-            // The magic correction for iPhone 240fps (plays 8x slower)
-            let actualTime = (mode === 'slo') ? (videoTime / 8) : videoTime;
-            
-            // h = 1/2 * g * (t/2)^2 => h = 1.226 * t^2
+            let actualTime = (mode === 'slo') ? (t2 - t1) / 8 : (t2 - t1);
             let heightCm = 122.5 * Math.pow(actualTime, 2);
             let finalResult = heightCm.toFixed(1);
             res.innerHTML = finalResult + '<span class="unit">cm</span>';
 
             if (save) {
                 const row = historyTable.insertRow(0);
-                row.innerHTML = `<td>Jump ${historyTable.rows.length} (${mode})</td><td class="hist-val">${finalResult} cm</td>`;
+                row.innerHTML = `<td>Jump ${historyTable.rows.length}</td><td class="hist-val">${finalResult} cm</td>`;
             }
         }
     }
