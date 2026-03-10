@@ -1,150 +1,147 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Jump Lab Pro (Fix)</title>
+    <title>Jump Lab: Landscape Edition</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
     <style>
         * { touch-action: manipulation; -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; padding: 10px; }
-        .container { max-width: 500px; margin: auto; }
         
-        /* Fixed Video Box */
+        /* Layout Fix: Adapts to Landscape or Portrait */
+        .container { max-width: 800px; margin: auto; display: flex; flex-direction: column; gap: 10px; }
+        
         .video-wrapper { 
             width: 100%; 
-            aspect-ratio: 9/16; /* Vertical video standard */
             background: #111; 
-            border-radius: 20px; 
+            border-radius: 15px; 
             overflow: hidden; 
             border: 2px solid #333; 
-            margin-bottom: 10px; 
-            position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
+            max-height: 60vh; /* Keeps video from taking over the whole screen */
         }
-        video { width: 100%; height: 100%; object-fit: contain; display: block; }
+        video { width: 100%; height: auto; max-height: 60vh; display: block; }
         
-        #result { font-size: 60px; font-weight: 900; color: #00ff88; margin: 5px 0; }
-        .unit { font-size: 20px; margin-left: 5px; }
+        #result { font-size: 64px; font-weight: 900; color: #00ff88; margin: 10px 0; font-variant-numeric: tabular-nums; }
+        .unit { font-size: 24px; vertical-align: middle; }
 
-        .mode-selector { display: flex; background: #222; border-radius: 12px; padding: 4px; margin-bottom: 10px; }
-        .mode-btn { flex: 1; padding: 12px; border-radius: 8px; border: none; background: transparent; color: #888; font-weight: bold; }
-        .mode-btn.active { background: #444; color: #00ff88; }
+        /* Mode Selection Grid */
+        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .mode-btn { padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #888; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .mode-btn.active { background: #00ff88; color: #000; border-color: #00ff88; }
 
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .upload-btn { background: #00ff88; color: #000; grid-column: span 2; padding: 20px; border-radius: 15px; font-weight: 900; cursor: pointer; }
-        .scrub-btn { background: #333; color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; }
-        .mark-btn { background: #ff4444; color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; }
+        /* Navigation Controls */
+        .controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .upload-btn { background: #00ff88; color: #000; grid-column: span 4; padding: 18px; border-radius: 12px; font-weight: 900; cursor: pointer; }
+        .step-btn { background: #333; color: white; border: none; padding: 20px 5px; border-radius: 12px; font-size: 18px; font-weight: bold; }
+        .mark-btn { grid-column: span 2; background: #ff4444; color: white; border: none; padding: 18px; border-radius: 12px; font-weight: bold; font-size: 14px; margin-top: 5px; }
         
         input[type=range] { width: 100%; height: 40px; accent-color: #00ff88; margin: 5px 0; }
-        .time-info { font-family: monospace; font-size: 12px; color: #666; display: flex; justify-content: space-between; }
+        .info-bar { display: flex; justify-content: space-between; font-family: monospace; font-size: 13px; color: #aaa; padding: 0 5px; }
         
-        #historyTable { width: 100%; margin-top: 20px; font-size: 14px; text-align: left; border-top: 1px solid #333; }
-        .hist-val { color: #00ff88; font-weight: bold; text-align: right; }
+        #history { width: 100%; margin-top: 20px; text-align: left; border-collapse: collapse; }
+        #history td { padding: 10px; border-bottom: 1px solid #222; font-size: 14px; }
+        .hist-res { color: #00ff88; font-weight: bold; text-align: right; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="result">0.0<span class="unit">cm</span></div>
-    
-    <div class="mode-selector">
-        <button id="normMode" class="mode-btn active" onclick="setMode('normal')">NORMAL</button>
-        <button id="sloMode" class="mode-btn" onclick="setMode('slo')">SLO-MO</button>
+
+    <div class="settings-grid">
+        <button id="mode-norm" class="mode-btn active" onclick="setMode('norm', 1)">NORMAL (30/60)</button>
+        <button id="mode-120" class="mode-btn" onclick="setMode('120', 4)">SLO-MO (120)</button>
+        <button id="mode-240" class="mode-btn" onclick="setMode('240', 8)" style="grid-column: span 2;">SLO-MO (240 FPS)</button>
     </div>
 
     <div class="video-wrapper">
         <video id="vid" playsinline muted preload="auto"></video>
     </div>
 
-    <div class="time-info">
-        <span id="currentTime">0.000s</span>
-        <span id="jumpStatus">Upload Video</span>
+    <div class="info-bar">
+        <span id="time-display">0.000s</span>
+        <span id="status">Upload Jump</span>
     </div>
-    <input type="range" id="scrubber" min="0" max="100" step="0.001" value="0">
+    
+    <input type="range" id="scrubber" min="0" max="100" step="0.0001" value="0">
 
     <div class="controls">
         <label for="fileInput" class="upload-btn">SELECT VIDEO</label>
         <input type="file" id="fileInput" accept="video/*" style="display:none">
 
-        <button class="scrub-btn" onclick="move(-0.033)">-1 Frame</button>
-        <button class="scrub-btn" onclick="move(0.033)">+1 Frame</button>
-        <button class="scrub-btn" onclick="move(-0.004)">-Fine (Slo)</button>
-        <button class="scrub-btn" onclick="move(0.004)">+Fine (Slo)</button>
+        <button class="step-btn" onclick="move(-0.1)">«</button>
+        <button class="step-btn" onclick="move(-0.0333)">‹</button>
+        <button class="step-btn" onclick="move(0.0333)">›</button>
+        <button class="step-btn" onclick="move(0.1)">»</button>
 
-        <button class="mark-btn" onclick="mark('takeoff')">MARK TAKEOFF</button>
-        <button class="mark-btn" onclick="mark('landing')">MARK LANDING</button>
+        <button class="mark-btn" onclick="mark('take')">MARK TAKEOFF</button>
+        <button class="mark-btn" onclick="mark('land')">MARK LANDING</button>
     </div>
 
-    <table id="historyTable"></table>
+    <table id="history"></table>
 </div>
 
 <script>
     const v = document.getElementById('vid');
     const res = document.getElementById('result');
     const scrub = document.getElementById('scrubber');
-    const timeDisp = document.getElementById('currentTime');
-    const status = document.getElementById('jumpStatus');
-    const historyTable = document.getElementById('historyTable');
+    const hist = document.getElementById('history');
+    
+    let t1 = null, t2 = null;
+    let timeFactor = 1; // Divisor for slo-mo math
 
-    let t1 = null, t2 = null, mode = 'normal';
-
-    function setMode(m) {
-        mode = m;
-        document.getElementById('normMode').classList.toggle('active', m === 'normal');
-        document.getElementById('sloMode').classList.toggle('active', m === 'slo');
+    function setMode(id, factor) {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('mode-' + id).classList.add('active');
+        timeFactor = factor;
         calculate(false);
     }
 
     document.getElementById('fileInput').onchange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            const url = URL.createObjectURL(file);
-            v.src = url;
-            status.innerText = "Loading...";
-
+            v.src = URL.createObjectURL(file);
             v.onloadedmetadata = async () => {
                 scrub.max = v.duration;
-                // --- THE BUG FIX: FORCE WAKEUP ---
-                v.currentTime = 0.1; // Move slightly forward
-                await v.play();      // Play for a millisecond
-                v.pause();           // Pause immediately
-                v.currentTime = 0;   // Reset to start
-                // ---------------------------------
-                status.innerText = "Video Ready!";
+                // Force Render
+                v.currentTime = 0.1; await v.play(); v.pause(); v.currentTime = 0;
+                document.getElementById('status').innerText = "Video Ready";
             };
         }
     };
 
+    function move(sec) { v.currentTime += sec; }
+    
     scrub.oninput = () => { v.currentTime = scrub.value; };
     v.ontimeupdate = () => { 
         scrub.value = v.currentTime;
-        timeDisp.innerText = v.currentTime.toFixed(3) + "s";
+        document.getElementById('time-display').innerText = v.currentTime.toFixed(3) + "s";
     };
 
-    function move(sec) { v.currentTime += sec; }
-
     function mark(type) {
-        if (type === 'takeoff') {
+        if (type === 'take') {
             t1 = v.currentTime;
-            status.innerText = "Takeoff Set!";
+            document.getElementById('status').innerText = "Takeoff Set";
         } else {
             t2 = v.currentTime;
-            status.innerText = "Landing Set!";
-            calculate(true); 
+            document.getElementById('status').innerText = "Landing Set";
+            calculate(true);
         }
     }
 
-    function calculate(save = false) {
+    function calculate(save) {
         if (t1 !== null && t2 !== null && t2 > t1) {
-            let actualTime = (mode === 'slo') ? (t2 - t1) / 8 : (t2 - t1);
-            let heightCm = 122.5 * Math.pow(actualTime, 2);
-            let finalResult = heightCm.toFixed(1);
-            res.innerHTML = finalResult + '<span class="unit">cm</span>';
+            // Physics: Height = 1.22625 * (FlightTime)^2
+            let flightTime = (t2 - t1) / timeFactor;
+            let height = 122.625 * Math.pow(flightTime, 2);
+            
+            res.innerHTML = height.toFixed(1) + '<span class="unit">cm</span>';
 
             if (save) {
-                const row = historyTable.insertRow(0);
-                row.innerHTML = `<td>Jump ${historyTable.rows.length}</td><td class="hist-val">${finalResult} cm</td>`;
+                const row = hist.insertRow(0);
+                row.innerHTML = `<td>Jump ${hist.rows.length + 1}</td><td class="hist-res">${height.toFixed(1)} cm</td>`;
             }
         }
     }
