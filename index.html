@@ -4,77 +4,151 @@
     <title>Jump Lab Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
     <style>
-        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; padding: 15px; }
-        .video-wrapper { width: 100%; max-width: 500px; margin: auto; background: #222; border-radius: 15px; overflow: hidden; min-height: 200px; border: 2px solid #333; }
+        /* CRITICAL: Stops iPhone Safari from zooming when you tap buttons fast */
+        * { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+        body { font-family: -apple-system, system-ui, sans-serif; background: #000; color: #fff; text-align: center; margin: 0; padding: 10px; overflow-x: hidden; }
+        .container { max-width: 500px; margin: auto; }
+        
+        /* Video Styling */
+        .video-wrapper { width: 100%; background: #111; border-radius: 20px; overflow: hidden; border: 2px solid #333; margin-bottom: 10px; position: relative; min-height: 200px; }
         video { width: 100%; display: block; }
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
-        button, label { background: #333; color: white; border: none; padding: 18px; border-radius: 12px; font-weight: bold; font-size: 14px; }
-        .primary { background: #00ff88; color: #000; }
-        .scrub { background: #444; flex: 1; padding: 15px 5px; }
-        #result { font-size: 50px; font-weight: 900; color: #00ff88; margin: 20px 0; }
-        #fileInput { display: none; }
-        .scrub-row { grid-column: span 2; display: flex; gap: 5px; }
+        
+        /* Result Display */
+        #result { font-size: 60px; font-weight: 900; color: #00ff88; margin: 5px 0; text-shadow: 0 0 20px rgba(0,255,136,0.3); }
+        .unit { font-size: 20px; color: #00ff88; margin-left: 5px; }
+
+        /* Mode Toggle */
+        .mode-selector { display: flex; background: #222; border-radius: 12px; padding: 4px; margin-bottom: 10px; }
+        .mode-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; background: transparent; color: #888; font-weight: bold; font-size: 12px; }
+        .mode-btn.active { background: #444; color: #00ff88; }
+
+        /* Controls */
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        button, label { background: #222; color: white; border: none; padding: 18px; border-radius: 12px; font-weight: bold; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+        
+        .upload-btn { background: #00ff88; color: #000; grid-column: span 2; font-size: 16px; margin-bottom: 5px; cursor: pointer; }
+        .scrub-btn { background: #333; }
+        .mark-btn { background: #ff4444; color: white; }
+        
+        /* Slider Scrubber */
+        input[type=range] { width: 100%; height: 35px; accent-color: #00ff88; background: transparent; margin: 5px 0; }
+        .time-info { font-family: monospace; font-size: 12px; color: #666; display: flex; justify-content: space-between; padding: 0 5px; }
+
+        /* History Table */
+        .history { margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; text-align: left; }
+        .history h3 { margin-top: 0; font-size: 14px; color: #888; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 10px 0; border-bottom: 1px solid #222; font-size: 14px; }
+        .hist-val { font-weight: bold; color: #00ff88; text-align: right; }
     </style>
 </head>
 <body>
 
-    <div class="video-wrapper">
-        <video id="vid" playsinline muted controls></video>
+<div class="container">
+    <div id="result">0.0<span class="unit">cm</span></div>
+    
+    <div class="mode-selector">
+        <button id="normMode" class="mode-btn active" onclick="setMode('normal')">NORMAL (30/60fps)</button>
+        <button id="sloMode" class="mode-btn" onclick="setMode('slo')">SLO-MO (240fps)</button>
     </div>
+
+    <div class="video-wrapper">
+        <video id="vid" playsinline muted></video>
+    </div>
+
+    <div class="time-info">
+        <span id="currentTime">0.000s</span>
+        <span id="jumpStatus">Select Takeoff</span>
+    </div>
+    <input type="range" id="scrubber" min="0" max="100" step="0.001" value="0">
 
     <div class="controls">
-        <label for="fileInput" class="primary" style="grid-column: span 2;">1. SELECT VIDEO</label>
-        <input type="file" id="fileInput" accept="video/*">
+        <label for="fileInput" class="upload-btn">UPLOAD JUMP VIDEO</label>
+        <input type="file" id="fileInput" accept="video/*" style="display:none">
 
-        <div class="scrub-row">
-            <button class="scrub" onclick="move(-0.033)">-1 Frame</button>
-            <button class="scrub" onclick="move(-0.004)">-SloMo</button>
-            <button class="scrub" onclick="move(0.004)">+SloMo</button>
-            <button class="scrub" onclick="move(0.033)">+1 Frame</button>
-        </div>
+        <button class="scrub-btn" onclick="move(-0.033)">-1 Frame</button>
+        <button class="scrub-btn" onclick="move(0.033)">+1 Frame</button>
+        <button class="scrub-btn" onclick="move(-0.004)">-Fine (Slo)</button>
+        <button class="scrub-btn" onclick="move(0.004)">+Fine (Slo)</button>
 
-        <button style="background:#ff4444" onclick="mark('takeoff')">MARK TAKEOFF</button>
-        <button style="background:#ff4444" onclick="mark('landing')">MARK LANDING</button>
+        <button class="mark-btn" onclick="mark('takeoff')">MARK TAKEOFF</button>
+        <button class="mark-btn" onclick="mark('landing')">MARK LANDING</button>
     </div>
 
-    <div id="result">-- cm</div>
-    <div id="debug" style="font-size:12px; color:#666;">Ready...</div>
+    <div class="history">
+        <h3>Jump History</h3>
+        <table id="historyTable"></table>
+    </div>
+</div>
 
-    <script>
-        const v = document.getElementById('vid');
-        const res = document.getElementById('result');
-        const dbg = document.getElementById('debug');
-        let t1 = 0, t2 = 0;
+<script>
+    const v = document.getElementById('vid');
+    const res = document.getElementById('result');
+    const scrub = document.getElementById('scrubber');
+    const timeDisp = document.getElementById('currentTime');
+    const status = document.getElementById('jumpStatus');
+    const historyTable = document.getElementById('historyTable');
 
-        document.getElementById('fileInput').onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            // This creates a temporary URL for your video file
+    let t1 = null, t2 = null, mode = 'normal';
+
+    function setMode(m) {
+        mode = m;
+        document.getElementById('normMode').classList.toggle('active', m === 'normal');
+        document.getElementById('sloMode').classList.toggle('active', m === 'slo');
+        calculate(false);
+    }
+
+    document.getElementById('fileInput').onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
             v.src = URL.createObjectURL(file);
-            v.style.display = "block";
+            v.onloadedmetadata = () => {
+                scrub.max = v.duration;
+                v.currentTime = 0;
+                t1 = null; t2 = null;
+                status.innerText = "Ready: Find Takeoff";
+            };
+        }
+    };
+
+    scrub.oninput = () => { v.currentTime = scrub.value; };
+    
+    v.ontimeupdate = () => { 
+        scrub.value = v.currentTime;
+        timeDisp.innerText = v.currentTime.toFixed(3) + "s";
+    };
+
+    function move(sec) { v.currentTime += sec; }
+
+    function mark(type) {
+        if (type === 'takeoff') {
+            t1 = v.currentTime;
+            status.innerText = "Takeoff Set! Now Landing.";
+        } else {
+            t2 = v.currentTime;
+            status.innerText = "Landing Set!";
+            calculate(true); 
+        }
+    }
+
+    function calculate(save = false) {
+        if (t1 !== null && t2 !== null && t2 > t1) {
+            let videoTime = t2 - t1;
+            // The magic correction for iPhone 240fps (plays 8x slower)
+            let actualTime = (mode === 'slo') ? (videoTime / 8) : videoTime;
             
-            // Force the iPhone to load the video
-            v.load();
-            dbg.innerText = "Video loading... Tap play to verify.";
-        };
+            // h = 1/2 * g * (t/2)^2 => h = 1.226 * t^2
+            let heightCm = 122.5 * Math.pow(actualTime, 2);
+            let finalResult = heightCm.toFixed(1);
+            res.innerHTML = finalResult + '<span class="unit">cm</span>';
 
-        function move(sec) { v.currentTime += sec; }
-
-        function mark(type) {
-            if (type === 'takeoff') {
-                t1 = v.currentTime;
-                dbg.innerText = `Takeoff set: ${t1.toFixed(4)}s`;
-            } else {
-                t2 = v.currentTime;
-                dbg.innerText = `Landing set: ${t2.toFixed(4)}s`;
-            }
-            if (t1 > 0 && t2 > t1) {
-                let flightTime = t2 - t1;
-                let heightCm = 122.5 * Math.pow(flightTime, 2);
-                res.innerText = heightCm.toFixed(2) + " cm";
+            if (save) {
+                const row = historyTable.insertRow(0);
+                row.innerHTML = `<td>Jump ${historyTable.rows.length} (${mode})</td><td class="hist-val">${finalResult} cm</td>`;
             }
         }
-    </script>
+    }
+</script>
 </body>
 </html>
